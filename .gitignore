@@ -1,0 +1,6 @@
+public/
+zips/
+__pycache__/
+*.zip
+*ticket*
+.env

@@ -1,0 +1,48 @@
+{
+  "regiones": [
+    "araucania"
+  ],
+  "tipos": [
+    "LR",
+    "I2",
+    "O1",
+    "O2"
+  ],
+  "tipos_siempre_obras": [
+    "O1",
+    "O2"
+  ],
+  "palabras_obras": [
+    "construccion",
+    "reposicion",
+    "ampliacion",
+    "mejoramiento",
+    "conservacion",
+    "restauracion"
+  ],
+  "palabras_no_obras": [
+    "adquisicion",
+    "compra",
+    "maquinaria",
+    "vehiculo",
+    "camion",
+    "camioneta",
+    "buses",
+    "carro bomba",
+    "ambulancia",
+    "retroexcavadora",
+    "motoniveladora",
+    "arriendo",
+    "leasing"
+  ],
+  "palabras_excluir_si_solo_palabras": [
+    "diseno",
+    "servicio",
+    "estudio",
+    "consultoria",
+    "asesoria",
+    "suministro"
+  ],
+  "anios_carga_inicial": 5,
+  "monto_minimo_clp": 1000000
+}

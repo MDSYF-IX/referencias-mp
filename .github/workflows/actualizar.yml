@@ -1,0 +1,78 @@
+# Actualiza los archivos de referencias de Mercado Público y los publica en la rama gh-pages
+# (GitHub Pages), siempre como un único commit sin historial para que el repo no crezca.
+name: Actualizar referencias Mercado Público
+
+on:
+  schedule:
+    - cron: '30 9 * * *'   # diario, 06:30 en Chile (horario de verano; 05:30 en invierno)
+  workflow_dispatch:
+    inputs:
+      modo:
+        description: 'diaria (API) · conciliacion (últimos 3 meses de datos abiertos) · inicial (últimos 60 meses)'
+        default: diaria
+        type: choice
+        options: [diaria, conciliacion, inicial]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: referencias-mp
+  cancel-in-progress: false
+
+jobs:
+  actualizar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Traer lo publicado (rama gh-pages)
+        run: |
+          mkdir -p public
+          if git ls-remote --exit-code --heads origin gh-pages >/dev/null; then
+            git fetch --depth 1 origin gh-pages
+            git --work-tree=public checkout origin/gh-pages -- .
+            git reset -q
+          fi
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Actualización diaria (API)
+        if: github.event_name == 'schedule' || inputs.modo == 'diaria'
+        env:
+          MP_TICKET: ${{ secrets.MP_TICKET }}
+          CMF_API_KEY: ${{ secrets.CMF_API_KEY }}
+        run: python scripts/diaria.py --publico public
+
+      - name: Día de la semana
+        run: echo "DIA=$(date -u +%w)" >> "$GITHUB_ENV"
+
+      # Conciliación con los datos abiertos: los domingos y a pedido.
+      - name: Conciliación (datos abiertos, últimos 3 meses)
+        if: (github.event_name == 'schedule' && env.DIA == '0') || inputs.modo == 'conciliacion'
+        env:
+          CMF_API_KEY: ${{ secrets.CMF_API_KEY }}
+        run: python scripts/carga.py --publico public --ultimos 3
+
+      - name: Carga inicial (datos abiertos, últimos 60 meses)
+        if: inputs.modo == 'inicial'
+        env:
+          CMF_API_KEY: ${{ secrets.CMF_API_KEY }}
+        run: python scripts/carga.py --publico public --ultimos 60
+
+      - name: Tamaño de los archivos
+        run: du -ab public/mp | sort -k2
+
+      - name: Publicar en gh-pages (un solo commit)
+        run: |
+          cd public
+          touch .nojekyll
+          git init -q -b gh-pages
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -q -m "Referencias Mercado Público $(date -u +%Y-%m-%d)"
+          git push -q -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" gh-pages
