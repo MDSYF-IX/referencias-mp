@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Referencias Mercado Público</title>
+<style>
+  :root { --tinta: #0f172a; --suave: #64748b; --linea: #e2e8f0; --azul: #1e3a8a; --fondo: #f8fafc; }
+  @media (prefers-color-scheme: dark) { :root { --tinta: #e2e8f0; --suave: #94a3b8; --linea: #334155; --azul: #93c5fd; --fondo: #0f172a; } }
+  body { margin: 0; background: var(--fondo); color: var(--tinta); font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { max-width: 760px; margin: 0 auto; padding: 32px 16px; }
+  h1 { font-size: 22px; margin: 0 0 4px; color: var(--azul); }
+  .sub { color: var(--suave); margin: 0 0 24px; }
+  table { width: 100%; border-collapse: collapse; margin: 8px 0 24px; }
+  th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--linea); }
+  th { font-size: 12px; color: var(--suave); font-weight: 600; }
+  td.n { text-align: right; font-variant-numeric: tabular-nums; }
+  a { color: var(--azul); }
+  code { font-size: 13px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Referencias de Mercado Público</h1>
+  <p class="sub">Licitaciones de obras adjudicadas (ChileCompra), usadas como referencia de costo en la pestaña
+    «Mercado Público» del buscador de referencias de <a href="https://formulador-sni.vercel.app/">PAT-Pro SNI</a>.</p>
+  <div id="contenido">Cargando…</div>
+  <p class="sub">Montos adjudicados según Mercado Público. Pueden incluir o no IVA según las bases de cada licitación.
+    Archivos: <code>mp/indice.json</code>, <code>mp/uf.json</code> y <code>mp/&lt;región&gt;/&lt;año&gt;.json</code>
+    (formato <code>{"campos": [...], "filas": [[...]]}</code>). Proceso y filtros:
+    <a href="https://github.com/MDSYF-IX/referencias-mp">MDSYF-IX/referencias-mp</a>.</p>
+</main>
+<script>
+  fetch('mp/indice.json', { cache: 'no-cache' }).then(r => r.json()).then(ix => {
+    const f = ix.actualizado.split('-').reverse().join('-');
+    let html = `<p>Actualizado al <strong>${f}</strong> · tipos ${ix.tipos.join(', ')}</p>`;
+    for (const [reg, x] of Object.entries(ix.regiones)) {
+      const total = Object.values(x.anios).reduce((a, b) => a + b, 0);
+      html += `<table><thead><tr><th>${x.nombre}</th><th style="text-align:right">Licitaciones</th></tr></thead><tbody>`
+        + Object.entries(x.anios).map(([a, n]) => `<tr><td><a href="mp/${reg}/${a}.json">${a}</a></td><td class="n">${n}</td></tr>`).join('')
+        + `<tr><td><strong>Total</strong></td><td class="n"><strong>${total}</strong></td></tr></tbody></table>`;
+    }
+    document.getElementById('contenido').innerHTML = html;
+  }).catch(e => { document.getElementById('contenido').textContent = 'No se pudo leer mp/indice.json (' + e.message + ').'; });
+</script>
+</body>
+</html>

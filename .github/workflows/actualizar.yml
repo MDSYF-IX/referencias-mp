@@ -83,6 +83,7 @@ jobs:
 
       - name: Publicar en gh-pages (un solo commit)
         run: |
+          cp pages/index.html public/index.html
           cd public
           touch .nojekyll
           git init -q -b gh-pages
