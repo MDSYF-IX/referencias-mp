@@ -33,15 +33,22 @@
     "retroexcavadora",
     "motoniveladora",
     "arriendo",
-    "leasing"
+    "leasing",
+    "aif",
+    "atif",
+    "inspeccion fiscal",
+    "inspeccion tecnica",
+    "diseno",
+    "estudio",
+    "est. prefac",
+    "prefactibilidad",
+    "asesoria",
+    "consultoria"
   ],
   "palabras_excluir_si_solo_palabras": [
-    "diseno",
     "servicio",
-    "estudio",
-    "consultoria",
-    "asesoria",
-    "suministro"
+    "suministro",
+    "mantencion"
   ],
   "anios_carga_inicial": 5,
   "monto_minimo_clp": 1000000

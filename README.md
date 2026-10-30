@@ -21,10 +21,10 @@ Campos: `cod, nom, org, reg, com, tipo, fpub, fadj, mon, est, adj, adj_uf, ofe, 
 ## Filtros (`config/filtros.json`)
 
 - `tipos`: tipos de licitación incluidos (el tipo es el sufijo del código: `1234-56-LR26` → LR).
-- `palabras_no_obras`: si el nombre contiene una de estas, nunca es obra (adquisición, maquinaria…).
+- `palabras_no_obras`: si el nombre contiene una de estas, nunca es obra (adquisición, maquinaria, AIF/ATIF, diseño, estudio, asesoría…).
 - `tipos_siempre_obras`: O1 y O2 entran siempre.
 - LR / I2: entran si la bandera `Obras` de ChileCompra es 2, o si el nombre tiene una de
-  `palabras_obras` y ninguna de `palabras_excluir_si_solo_palabras` (diseño, servicio, estudio…).
+  `palabras_obras` y ninguna de `palabras_excluir_si_solo_palabras` (servicio, suministro, mantención).
 
 Tipologías por palabras clave: `config/tipologias.json`.
 
