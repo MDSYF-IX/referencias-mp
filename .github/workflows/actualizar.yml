@@ -8,10 +8,16 @@ on:
   workflow_dispatch:
     inputs:
       modo:
-        description: 'diaria (API) · conciliacion (últimos 3 meses de datos abiertos) · inicial (últimos 60 meses)'
+        description: 'diaria (API) · conciliacion (últimos 3 meses de datos abiertos) · inicial (últimos 60 meses) · relleno (API, rango de fechas de adjudicación)'
         default: diaria
         type: choice
-        options: [diaria, conciliacion, inicial]
+        options: [diaria, conciliacion, inicial, relleno]
+      desde:
+        description: 'relleno: primer día AAAA-MM-DD'
+        required: false
+      hasta:
+        description: 'relleno: último día AAAA-MM-DD (vacío = ayer)'
+        required: false
 
 permissions:
   contents: write
@@ -46,6 +52,15 @@ jobs:
           MP_TICKET: ${{ secrets.MP_TICKET }}
           CMF_API_KEY: ${{ secrets.CMF_API_KEY }}
         run: python scripts/diaria.py --publico public
+
+      - name: Relleno (API, rango de fechas)
+        if: inputs.modo == 'relleno'
+        env:
+          MP_TICKET: ${{ secrets.MP_TICKET }}
+          CMF_API_KEY: ${{ secrets.CMF_API_KEY }}
+          DESDE: ${{ inputs.desde }}
+          HASTA: ${{ inputs.hasta }}
+        run: python scripts/diaria.py --publico public --desde "$DESDE" ${HASTA:+--hasta "$HASTA"}
 
       - name: Día de la semana
         run: echo "DIA=$(date -u +%w)" >> "$GITHUB_ENV"

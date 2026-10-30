@@ -32,7 +32,7 @@ Tipologías por palabras clave: `config/tipologias.json`.
 
 - **Diario 06:30**: `scripts/diaria.py` (API de Mercado Público, secreto `MP_TICKET`; sin ticket no hace nada).
 - **Domingos**: `scripts/carga.py --ultimos 3` concilia con los datos abiertos.
-- **A pedido** (Actions → Run workflow → `inicial`): carga de los últimos 60 meses.
+- **A pedido** (Actions → Run workflow): `inicial` = últimos 60 meses de datos abiertos; `relleno` = API para un rango de fechas de adjudicación (los archivos de datos abiertos de meses pasados se regeneran cada varios meses, así que lo adjudicado después queda fuera hasta entonces).
 
 Correr dos veces no duplica filas (clave: código de la licitación).
 

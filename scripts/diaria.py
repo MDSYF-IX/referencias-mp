@@ -58,6 +58,8 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--publico', required=True)
     ap.add_argument('--fecha', help='DDMMAAAA; por defecto, ayer')
+    ap.add_argument('--desde', help='relleno: primer día (AAAA-MM-DD) de un rango de fechas de adjudicación')
+    ap.add_argument('--hasta', help='relleno: último día (AAAA-MM-DD); por defecto, ayer')
     ap.add_argument('--muestra', help='imprime la respuesta cruda del detalle de un código y termina')
     a = ap.parse_args()
     ticket = os.environ.get('MP_TICKET')
@@ -67,23 +69,42 @@ def main():
     if a.muestra:
         print(json.dumps(Contador.get(f'{BASE}?codigo={a.muestra}&ticket={ticket}'), ensure_ascii=False, indent=1)[:6000])
         return
-    fecha = a.fecha or (datetime.date.today() - datetime.timedelta(days=1)).strftime('%d%m%Y')
-    lista = Contador.get(f'{BASE}?fecha={fecha}&estado=adjudicada&ticket={ticket}').get('Listado') or []
-    pre = [x for x in lista if tipo_de_codigo(x.get('CodigoExterno')) in FILTROS['tipos']
-           and not _tiene(FILTROS['palabras_no_obras'], norm(x.get('Nombre')))]
-    nuevas, descartadas, errores = {}, 0, []
-    for x in pre:
-        try:
-            det = (Contador.get(f"{BASE}?codigo={x['CodigoExterno']}&ticket={ticket}").get('Listado') or [None])[0]
-        except Exception as e:
-            errores.append(f"{x['CodigoExterno']}: {e}"); continue
-        if not det:
-            continue
-        L = desde_detalle(det)
-        if L['reg'] in FILTROS['regiones'] and es_obra(L['tipo'], L['nom'], L.pop('obras')):
-            nuevas[L['cod']] = L
-        else:
-            descartadas += 1
+    ayer = datetime.date.today() - datetime.timedelta(days=1)
+    if a.desde:
+        # Relleno: los archivos de datos abiertos de meses pasados se regeneran cada varios
+        # meses, así que lo adjudicado después queda fuera hasta entonces; la API lo trae.
+        d0, d1 = datetime.date.fromisoformat(a.desde), datetime.date.fromisoformat(a.hasta) if a.hasta else ayer
+        fechas = [(d0 + datetime.timedelta(days=k)).strftime('%d%m%Y') for k in range((d1 - d0).days + 1)]
+    else:
+        fechas = [a.fecha or ayer.strftime('%d%m%Y')]
+    # Las ya publicadas no se vuelven a pedir (ahorra consultas en el relleno).
+    conocidas = {c for reg in FILTROS['regiones'] for c in leer_region(a.publico, reg)} if a.desde else set()
+    nuevas, descartadas, errores, n_lista, n_pre, ultima = {}, 0, [], 0, 0, None
+    try:
+        for fecha in fechas:
+            lista = Contador.get(f'{BASE}?fecha={fecha}&estado=adjudicada&ticket={ticket}').get('Listado') or []
+            pre = [x for x in lista if tipo_de_codigo(x.get('CodigoExterno')) in FILTROS['tipos']
+                   and not _tiene(FILTROS['palabras_no_obras'], norm(x.get('Nombre'))) and x.get('CodigoExterno') not in conocidas]
+            n_lista += len(lista); n_pre += len(pre)
+            for x in pre:
+                try:
+                    det = (Contador.get(f"{BASE}?codigo={x['CodigoExterno']}&ticket={ticket}").get('Listado') or [None])[0]
+                except RuntimeError:
+                    raise
+                except Exception as e:
+                    errores.append(f"{x['CodigoExterno']}: {e}"); continue
+                if not det:
+                    continue
+                L = desde_detalle(det)
+                if L['reg'] in FILTROS['regiones'] and es_obra(L['tipo'], L['nom'], L.pop('obras')):
+                    nuevas[L['cod']] = L
+                else:
+                    descartadas += 1
+            ultima = fecha
+    except RuntimeError as e:
+        # Límite de consultas: se guarda lo obtenido y se informa hasta qué día se llegó.
+        print(f'{e}. Último día completo: {ultima or "ninguno"}; continuar desde el día siguiente.')
+    fecha = fechas[0] if len(fechas) == 1 else f'{fechas[0]} a {ultima}'
     if nuevas:
         uf = cargar_uf(a.publico, {int((L['fadj'] or L['fpub'])[:4]) for L in nuevas.values()})
         for reg in FILTROS['regiones']:
@@ -94,7 +115,7 @@ def main():
             rellenar_uf(actual, uf)
             escribir_region(a.publico, reg, actual)
         escribir_indice(a.publico)
-    print(f'Fecha {fecha}: {len(lista)} adjudicadas en el país, {len(pre)} pasan el prefiltro, '
+    print(f'Fecha {fecha}: {n_lista} adjudicadas en el país, {n_pre} pasan el prefiltro, '
           f'{len(nuevas)} nuevas o actualizadas, {descartadas} descartadas, {len(errores)} errores, {Contador.n} consultas.')
     for e in errores:
         print('  ERROR', e)
