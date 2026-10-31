@@ -1,11 +1,75 @@
 {
-  "salud": ["cesfam", "cecosf", "posta", "hospital", "sar", "sapu", "consultorio"],
-  "educacion": ["escuela", "liceo", "jardin infantil", "sala cuna", "colegio", "establecimiento educacional"],
-  "deporte": ["multicancha", "estadio", "gimnasio", "polideportivo", "cancha", "complejo deportivo", "skatepark"],
-  "comunitario": ["sede social", "centro comunitario", "sede comunitaria"],
-  "espacio publico": ["plaza", "parque", "paseo", "area verde", "costanera"],
-  "vialidad": ["pavimentacion", "pavimento", "calle", "pasaje", "vereda", "puente", "camino", "ruta", "ciclovia", "pasarela"],
-  "agua y saneamiento": ["apr", "agua potable", "alcantarillado", "colector", "aguas lluvias"],
-  "seguridad": ["cuartel", "compania de bomberos", "bomberos", "comisaria"],
-  "edificios publicos": ["edificio consistorial", "municipal", "edificio"]
+  "salud": [
+    "cesfam",
+    "cecosf",
+    "posta",
+    "hospital",
+    "sar",
+    "sapu",
+    "consultorio"
+  ],
+  "educacion": [
+    "escuela",
+    "liceo",
+    "jardin infantil",
+    "sala cuna",
+    "colegio",
+    "establecimiento educacional"
+  ],
+  "deporte": [
+    "multicancha",
+    "estadio",
+    "gimnasio",
+    "polideportivo",
+    "cancha",
+    "complejo deportivo",
+    "skatepark"
+  ],
+  "comunitario": [
+    "sede social",
+    "centro comunitario",
+    "sede comunitaria"
+  ],
+  "espacio publico": [
+    "plaza",
+    "parque",
+    "paseo",
+    "area verde",
+    "costanera",
+    "juegos infantiles",
+    "area de juegos",
+    "mirador",
+    "borde rio",
+    "borde lago"
+  ],
+  "vialidad": [
+    "pavimentacion",
+    "pavimento",
+    "calle",
+    "pasaje",
+    "vereda",
+    "puente",
+    "camino",
+    "ruta",
+    "ciclovia",
+    "pasarela"
+  ],
+  "agua y saneamiento": [
+    "apr",
+    "agua potable",
+    "alcantarillado",
+    "colector",
+    "aguas lluvias"
+  ],
+  "seguridad": [
+    "cuartel",
+    "compania de bomberos",
+    "bomberos",
+    "comisaria"
+  ],
+  "edificios publicos": [
+    "edificio consistorial",
+    "municipal",
+    "edificio"
+  ]
 }

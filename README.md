@@ -4,7 +4,8 @@ Licitaciones de obras adjudicadas en Mercado Público (ChileCompra), como refere
 para la pestaña **Mercado Público** del buscador de referencias de PAT-Pro SNI
 (formulador-sni.vercel.app).
 
-Fase inicial: Región de La Araucanía, tipos LR, I2, O1 y O2. Una fila por licitación.
+Fase inicial: Región de La Araucanía, tipos LR, I2, O1 y O2. Una fila por licitación: adjudicadas
+y en proceso (publicadas, abiertas a ofertas, y cerradas en evaluación; campo `estado`).
 
 ## Archivos publicados (GitHub Pages, rama `gh-pages`)
 

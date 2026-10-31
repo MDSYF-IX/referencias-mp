@@ -8,7 +8,22 @@ FILTROS = json.load(open(os.path.join(CONFIG, 'filtros.json'), encoding='utf-8')
 TIPOLOGIAS = json.load(open(os.path.join(CONFIG, 'tipologias.json'), encoding='utf-8'))
 
 # Columnas del formato compacto: {"campos": CAMPOS, "filas": [[...], ...]}.
-CAMPOS = ['cod', 'nom', 'org', 'reg', 'com', 'tipo', 'fpub', 'fadj', 'mon', 'est', 'adj', 'adj_uf', 'ofe', 'prov', 'tipol', 'bip', 'obs']
+CAMPOS = ['cod', 'nom', 'org', 'reg', 'com', 'tipo', 'fpub', 'fadj', 'mon', 'est', 'adj', 'adj_uf', 'ofe', 'prov', 'tipol', 'bip', 'obs',
+          'estado', 'fcie', 'est_uf']
+
+
+def estado_norm(txt):
+    """Estado de Mercado Público → 'adjudicada' | 'cerrada' (en evaluación) | 'publicada' | None.
+    Desiertas, revocadas y suspendidas no se incluyen."""
+    n = str(txt or '').strip().lower()
+    for e in ('adjudicada', 'cerrada', 'publicada'):
+        if n.startswith(e):
+            return e
+    return None
+
+
+def es_adjudicada(x):
+    return (x.get('estado') or 'adjudicada') == 'adjudicada'
 
 
 def norm(s):
@@ -89,9 +104,11 @@ def num(s):
         return 0.0
 
 
-def get_json(url, intentos=3, pausa=0.4):
-    """GET con reintentos (1 s, 2 s, 4 s) ante 429, 5xx o timeout."""
+def get_json(url, intentos=4, pausa=0.4):
+    """GET con reintentos ante 5xx o timeout (1, 2, 4, 8 s) y ante 429, límite de consultas
+    por segundo de la API (5, 10, 20, 40 s)."""
     for k in range(intentos + 1):
+        espera = 2 ** k
         try:
             with urllib.request.urlopen(urllib.request.Request(url, headers={'User-Agent': 'referencias-mp'}), timeout=60) as r:
                 time.sleep(pausa)
@@ -99,10 +116,12 @@ def get_json(url, intentos=3, pausa=0.4):
         except urllib.error.HTTPError as e:
             if e.code not in (429, 500, 502, 503, 504) or k == intentos:
                 raise
+            if e.code == 429:
+                espera = 5 * 2 ** k
         except (urllib.error.URLError, TimeoutError):
             if k == intentos:
                 raise
-        time.sleep(2 ** k)
+        time.sleep(espera)
 
 
 # ── UF diaria (mindicador.cl, por año) ─────────────────────────────────────────────
@@ -143,7 +162,16 @@ def uf_de(uf, fecha):
 
 
 def completar(L, uf):
-    """Campos calculados: adj_uf, tipología, BIP y observación de montos no confiables."""
+    """Campos calculados: adj_uf, est_uf, tipología, BIP y observación de montos no confiables.
+    En proceso (sin adjudicar) solo hay presupuesto estimado: est_uf con la UF de la publicación."""
+    L['est_uf'] = monto_uf(L.get('est'), L['mon'], uf_de(uf, L.get('fpub')))
+    if not es_adjudicada(L):
+        L.update(adj=None, adj_uf=None, fadj=None, prov=[])
+        L['tipol'] = tipologia(L['nom'])
+        L['bip'] = L.get('bip') or codigo_bip(L['nom'], L.pop('desc', ''))
+        L.pop('desc', None)
+        L['obs'] = None
+        return L
     v = uf_de(uf, L.get('fadj') or L.get('fpub'))
     obs = []
     if L['mon'] == 'CLF':
@@ -179,9 +207,27 @@ def leer_region(publico, reg):
     return out
 
 
+def monto_uf(monto, mon, v):
+    if not monto:
+        return None
+    if mon == 'CLF':
+        return round(monto, 2)
+    return round(monto / v, 2) if mon == 'CLP' and v else None
+
+
+def combinar(viejo, nuevo):
+    """Una adjudicada no vuelve a «en proceso»: los archivos de datos abiertos de meses pasados
+    pueden traer un estado antiguo («Cerrada») de una licitación que la API ya trae adjudicada."""
+    if viejo and es_adjudicada(viejo) and not es_adjudicada(nuevo):
+        return viejo
+    return nuevo
+
+
 def rellenar_uf(lics, uf):
-    """Completa adj_uf de las filas que quedaron sin UF (la fuente no respondió en esa corrida)."""
+    """Completa adj_uf y est_uf de las filas que quedaron sin UF (la fuente no respondió)."""
     for x in lics.values():
+        if x.get('est_uf') is None and x.get('est'):
+            x['est_uf'] = monto_uf(x['est'], x['mon'], uf_de(uf, x['fpub']))
         if x.get('adj_uf') is None and x.get('adj') and x['mon'] in ('CLP', 'CLF'):
             v = uf_de(uf, x.get('fadj') or x['fpub'])
             if x['mon'] == 'CLF':
@@ -201,7 +247,10 @@ def escribir_region(publico, reg, lics):
         if f.endswith('.json') and f[:-5] not in por_anio:
             os.remove(os.path.join(carpeta, f))
     for a, xs in por_anio.items():
-        xs.sort(key=lambda x: (x.get('fadj') or '', x['cod']), reverse=True)
+        # La tipología se recalcula siempre: un cambio en config/tipologias.json alcanza a todas.
+        for x in xs:
+            x['tipol'] = tipologia(x['nom'])
+        xs.sort(key=lambda x: (x.get('fadj') or x['fpub'] or '', x['cod']), reverse=True)
         json.dump({'campos': CAMPOS, 'filas': [[x.get(c) for c in CAMPOS] for x in xs]},
                   open(os.path.join(carpeta, f'{a}.json'), 'w', encoding='utf-8'), ensure_ascii=False, separators=(',', ':'))
 

@@ -14,7 +14,7 @@ Uso: python scripts/diaria.py --publico public [--fecha DDMMAAAA]
 """
 import argparse, datetime, json, os, sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from comun import FILTROS, norm, region_slug, tipo_de_codigo, es_obra, num, get_json, cargar_uf, completar, leer_region, escribir_region, escribir_indice, rellenar_uf, _tiene
+from comun import FILTROS, norm, region_slug, tipo_de_codigo, es_obra, num, get_json, cargar_uf, completar, leer_region, escribir_region, escribir_indice, rellenar_uf, _tiene, estado_norm, combinar
 
 BASE = 'https://api.mercadopublico.cl/servicios/v1/publico/licitaciones.json'
 LIMITE = 9000
@@ -48,10 +48,46 @@ def desde_detalle(d):
         cod=d['CodigoExterno'], nom=(d.get('Nombre') or '').strip(), org=(comp.get('NombreOrganismo') or '').strip(),
         reg=region_slug(comp.get('RegionUnidad')), com=(comp.get('ComunaUnidad') or '').strip(),
         tipo=d.get('Tipo') or tipo_de_codigo(d['CodigoExterno']), fpub=fecha_iso(fechas.get('FechaPublicacion')),
+        estado=estado_norm(d.get('Estado')), fcie=fecha_iso(fechas.get('FechaCierre')),
         fadj=fecha_iso(fechas.get('FechaAdjudicacion')), mon=d.get('Moneda') or 'CLP', est=num(d.get('MontoEstimado')) or None,
         adj=round(adj, 2), ofe=int(num((d.get('Adjudicacion') or {}).get('NumeroOferentes'))) or None,
         prov=[f'{n} ({r})' for r, n in prov.items()], desc=d.get('Descripcion') or '', obras=d.get('Obras'),
         bip=str(d['CodigoBIP']).strip() if d.get('CodigoBIP') else None)
+
+
+def publicadas(publico, ticket, nuevas, errores):
+    """Licitaciones publicadas (abiertas a ofertas) hoy: datos abiertos no las trae hasta que
+    cierran. Se pide el detalle solo de las que no se han visto: las ya publicadas y las
+    descartadas (otra región, no obra) se recuerdan en cache/activas_descartadas.json."""
+    ruta = os.path.join(publico, 'cache', 'activas_descartadas.json')
+    descartadas = set(json.load(open(ruta, encoding='utf-8'))) if os.path.exists(ruta) else set()
+    try:
+        act = Contador.get(f'{BASE}?estado=activas&ticket={ticket}').get('Listado') or []
+    except Exception as e:
+        errores.append(f'activas: {e}'); return 0
+    vigentes = {x.get('CodigoExterno') for x in act}
+    conocidas = {c for reg in FILTROS['regiones'] for c in leer_region(publico, reg)} | set(nuevas) | descartadas
+    pre = [x for x in act if tipo_de_codigo(x.get('CodigoExterno')) in FILTROS['tipos'] and x.get('CodigoExterno') not in conocidas
+           and not _tiene(FILTROS['palabras_no_obras'], norm(x.get('Nombre')))]
+    n = 0
+    try:
+        for x in pre:
+            try:
+                det = (Contador.get(f"{BASE}?codigo={x['CodigoExterno']}&ticket={ticket}").get('Listado') or [None])[0]
+            except RuntimeError:
+                raise
+            except Exception as e:
+                errores.append(f"{x['CodigoExterno']}: {e}"); continue
+            L = desde_detalle(det) if det else None
+            if L and L['estado'] and L['reg'] in FILTROS['regiones'] and es_obra(L['tipo'], L['nom'], L.pop('obras')):
+                nuevas[L['cod']] = L; n += 1
+            else:
+                descartadas.add(x['CodigoExterno'])
+    except RuntimeError as e:
+        print(e)
+    os.makedirs(os.path.dirname(ruta), exist_ok=True)
+    json.dump(sorted(descartadas & vigentes), open(ruta, 'w', encoding='utf-8'))
+    return n
 
 
 def main():
@@ -105,18 +141,19 @@ def main():
         # Límite de consultas: se guarda lo obtenido y se informa hasta qué día se llegó.
         print(f'{e}. Último día completo: {ultima or "ninguno"}; continuar desde el día siguiente.')
     fecha = fechas[0] if len(fechas) == 1 else f'{fechas[0]} a {ultima}'
+    n_act = publicadas(a.publico, ticket, nuevas, errores) if not a.desde else 0
     if nuevas:
         uf = cargar_uf(a.publico, {int((L['fadj'] or L['fpub'])[:4]) for L in nuevas.values()})
         for reg in FILTROS['regiones']:
             actual = leer_region(a.publico, reg)
             for c, L in nuevas.items():
                 if L['reg'] == reg:
-                    actual[c] = completar(L, uf)
+                    actual[c] = combinar(actual.get(c), completar(L, uf))
             rellenar_uf(actual, uf)
             escribir_region(a.publico, reg, actual)
         escribir_indice(a.publico)
     print(f'Fecha {fecha}: {n_lista} adjudicadas en el país, {n_pre} pasan el prefiltro, '
-          f'{len(nuevas)} nuevas o actualizadas, {descartadas} descartadas, {len(errores)} errores, {Contador.n} consultas.')
+          f'{len(nuevas)} nuevas o actualizadas ({n_act} publicadas), {descartadas} descartadas, {len(errores)} errores, {Contador.n} consultas.')
     for e in errores:
         print('  ERROR', e)
 

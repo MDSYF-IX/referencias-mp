@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
     inputs:
       modo:
-        description: 'diaria (API) · conciliacion (últimos 3 meses de datos abiertos) · inicial (últimos 60 meses) · relleno (API, rango de fechas de adjudicación)'
+        description: 'diaria (datos abiertos 6 meses + API) · conciliacion (solo datos abiertos, 6 meses) · inicial (últimos 60 meses) · relleno (API, rango de fechas de adjudicación)'
         default: diaria
         type: choice
         options: [diaria, conciliacion, inicial, relleno]
@@ -46,6 +46,21 @@ jobs:
         with:
           python-version: '3.12'
 
+      # Primero los datos abiertos (estado de las cerradas y adjudicadas de los últimos 6 meses,
+      # que ChileCompra regenera seguido) y después la API, que trae lo más reciente: las
+      # adjudicadas de ayer y las publicadas (abiertas a ofertas), que datos abiertos aún no tiene.
+      - name: Conciliación (datos abiertos, últimos 6 meses)
+        if: github.event_name == 'schedule' || inputs.modo == 'conciliacion' || inputs.modo == 'diaria'
+        env:
+          CMF_API_KEY: ${{ secrets.CMF_API_KEY }}
+        run: python scripts/carga.py --publico public --ultimos 6
+
+      - name: Carga inicial (datos abiertos, últimos 60 meses)
+        if: inputs.modo == 'inicial'
+        env:
+          CMF_API_KEY: ${{ secrets.CMF_API_KEY }}
+        run: python scripts/carga.py --publico public --ultimos 60
+
       - name: Actualización diaria (API)
         if: github.event_name == 'schedule' || inputs.modo == 'diaria'
         env:
@@ -61,22 +76,6 @@ jobs:
           DESDE: ${{ inputs.desde }}
           HASTA: ${{ inputs.hasta }}
         run: python scripts/diaria.py --publico public --desde "$DESDE" ${HASTA:+--hasta "$HASTA"}
-
-      - name: Día de la semana
-        run: echo "DIA=$(date -u +%w)" >> "$GITHUB_ENV"
-
-      # Conciliación con los datos abiertos: los domingos y a pedido.
-      - name: Conciliación (datos abiertos, últimos 3 meses)
-        if: (github.event_name == 'schedule' && env.DIA == '0') || inputs.modo == 'conciliacion'
-        env:
-          CMF_API_KEY: ${{ secrets.CMF_API_KEY }}
-        run: python scripts/carga.py --publico public --ultimos 3
-
-      - name: Carga inicial (datos abiertos, últimos 60 meses)
-        if: inputs.modo == 'inicial'
-        env:
-          CMF_API_KEY: ${{ secrets.CMF_API_KEY }}
-        run: python scripts/carga.py --publico public --ultimos 60
 
       - name: Tamaño de los archivos
         run: du -ab public/mp | sort -k2

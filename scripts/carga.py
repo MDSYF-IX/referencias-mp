@@ -12,7 +12,7 @@ Uso:
 """
 import argparse, csv, io, os, sys, tempfile, time, urllib.request, zipfile, collections
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from comun import FILTROS, region_slug, es_obra, num, cargar_uf, completar, leer_region, escribir_region, escribir_indice, rellenar_uf
+from comun import FILTROS, region_slug, es_obra, num, cargar_uf, completar, leer_region, escribir_region, escribir_indice, rellenar_uf, estado_norm, combinar
 
 URL = 'https://transparenciachc.blob.core.windows.net/lic-da/{}.zip'
 
@@ -49,7 +49,8 @@ def procesar_mes(ruta):
     out, vistos = collections.defaultdict(dict), collections.Counter()
     for r in rd:
         reg = region_slug(r['RegionUnidad'])
-        if reg not in FILTROS['regiones'] or not r['Estado'].startswith('Adjudicada'):
+        estado = estado_norm(r['Estado'])
+        if reg not in FILTROS['regiones'] or not estado:
             continue
         cod = r['CodigoExterno'].strip()
         L = out[reg].get(cod)
@@ -59,10 +60,11 @@ def procesar_mes(ruta):
                 continue
             L = out[reg][cod] = dict(
                 cod=cod, nom=r['Nombre'].strip(), org=r['NombreOrganismo'].strip(), reg=reg, com=r['ComunaUnidad'].strip(),
-                tipo=r['Tipo'], fpub=r['FechaPublicacion'][:10], fadj=(r['FechaAdjudicacion'] or '')[:10] or None,
+                tipo=r['Tipo'], fpub=r['FechaPublicacion'][:10], estado=estado, fcie=(r['FechaCierre'] or '')[:10] or None,
+                fadj=((r['FechaAdjudicacion'] or '')[:10] or None) if estado == 'adjudicada' else None,
                 mon=r['CodigoMoneda'].strip(), est=num(r['MontoEstimado']) or None, adj=0.0,
                 ofe=int(num(r['NumeroOferentes'])) or None, prov={}, desc=r['Descripcion'])
-        if r['Oferta seleccionada'].lower().startswith('selec'):
+        if L['estado'] == 'adjudicada' and (r['Oferta seleccionada'] or '').lower().startswith('selec'):
             L['adj'] += num(r['MontoLineaAdjudica']) or num(r['CantidadAdjudicada']) * num(r['MontoUnitarioOferta'])
             L['prov'][r['RutProveedor'].strip()] = r['RazonSocialProveedor'].strip() or r['NombreProveedor'].strip()
     for lics in out.values():
@@ -96,15 +98,19 @@ def main():
         if not a.zips:
             os.remove(ruta)
     uf = cargar_uf(a.publico, [int(m[:4]) for m in procesados] + [time.localtime().tm_year])
+    hoy = time.strftime('%Y-%m-%d')
     for reg in FILTROS['regiones']:
-        actual = leer_region(a.publico, reg)
-        # Reemplaza lo publicado en los meses procesados (lo que ya no cumple el filtro se va).
-        actual = {c: x for c, x in actual.items() if x['fpub'][:7] not in procesados}
+        previo = leer_region(a.publico, reg)
+        # Reemplaza lo publicado en los meses procesados: lo que ya no cumple el filtro (desierta,
+        # revocada…) se va. Se conservan las publicadas que siguen abiertas (datos abiertos solo
+        # trae una licitación cuando cierra) y una adjudicada no vuelve a «en proceso».
+        actual = {c: x for c, x in previo.items() if x['fpub'][:7] not in procesados
+                  or (x.get('estado') == 'publicada' and (x.get('fcie') or hoy) >= hoy)}
         for c, L in nuevos[reg].items():
-            actual[c] = completar(L, uf)
+            actual[c] = combinar(previo.get(c), completar(L, uf))
         rellenar_uf(actual, uf)
         escribir_region(a.publico, reg, actual)
-        n = collections.Counter(((x.get('fadj') or x['fpub'])[:4], x['tipo']) for x in actual.values())
+        n = collections.Counter(((x.get('fadj') or x['fpub'])[:4], x['tipo'], x.get('estado') or 'adjudicada') for x in actual.values())
         print(reg, len(actual), dict(sorted(n.items())))
     escribir_indice(a.publico)
 
